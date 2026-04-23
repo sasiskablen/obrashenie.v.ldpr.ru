@@ -1,9 +1,3 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
-
-const supabaseUrl = 'https://gkmcoqjstsjrqxyycvis.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrbWNvcWpzdHNqcnF4eXljdmlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjY1MDgsImV4cCI6MjA5MjUwMjUwOH0.32-7DWQ5ziWkfHDf5cn4O9GmnC57MEmfEC81XEGk6B8'
-
-window.__SUPABASE__ = createClient(supabaseUrl, supabaseAnonKey)
 /* global supabase */
 (function () {
   const THEME_KEY = "ldpr_theme";
