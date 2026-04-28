@@ -1,6 +1,7 @@
 /* global supabase */
 (function () {
   const THEME_KEY = "ldpr_theme";
+  const VISION_KEY = "ldpr_vision_mode";
   const ROLES = { USER: "user", ADMIN: "admin" };
   const STATUS_LABELS = { new: "Новое", in_progress: "В работе", closed: "Завершено" };
   const STATUS_CLASSES = { new: "status-new", in_progress: "status-progress", closed: "status-closed" };
@@ -51,6 +52,34 @@
     const btn = document.createElement("button"); btn.id = "themeToggleBtn"; btn.className = "theme-toggle-btn"; btn.type = "button";
     function setLabel(theme) { btn.textContent = theme === "light" ? "Темная тема" : "Светлая тема"; }
     setLabel(saved); btn.addEventListener("click", function () { const c = document.body.classList.contains("theme-light") ? "light" : "dark"; const n = c === "light" ? "dark" : "light"; applyTheme(n); localStorage.setItem(THEME_KEY, n); setLabel(n); });
+    document.body.appendChild(btn);
+  }
+  function applyVisionMode(enabled) {
+    if (enabled) {
+      document.body.classList.add("vision-impaired");
+    } else {
+      document.body.classList.remove("vision-impaired");
+    }
+    localStorage.setItem(VISION_KEY, enabled ? "on" : "off");
+  }
+  function initVisionToggle() {
+    const saved = localStorage.getItem(VISION_KEY) === "on";
+    applyVisionMode(saved);
+    if (document.getElementById("visionToggleBtn")) return;
+    const btn = document.createElement("button");
+    btn.id = "visionToggleBtn";
+    btn.className = "vision-toggle-btn";
+    btn.type = "button";
+    function updateBtnText() {
+      const isOn = document.body.classList.contains("vision-impaired");
+      btn.textContent = isOn ? "Обычная версия" : "Версия для слабовидящих";
+    }
+    updateBtnText();
+    btn.addEventListener("click", function () {
+      const wasOn = document.body.classList.contains("vision-impaired");
+      applyVisionMode(!wasOn);
+      updateBtnText();
+    });
     document.body.appendChild(btn);
   }
   function normalizeAttachment(a) { if (!a) return null; if (typeof a === "string") return { name: a, type: "", isImage: false, dataUrl: "" }; return { name: a.name || "Файл", type: a.type || "", isImage: Boolean(a.isImage), dataUrl: a.dataUrl || "" }; }
@@ -239,7 +268,9 @@
     document.addEventListener("click", function (e) { var link = e.target.closest("a.image-open-link"); if (!link) return; e.preventDefault(); var src = link.getAttribute("href"); if (!src) return; imgEl.src = src; modalEl.classList.remove("hidden"); modalEl.classList.add("flex"); });
   }
   document.addEventListener("DOMContentLoaded", function () {
-    initThemeToggle(); initInlineImageViewer();
+    initThemeToggle();
+    initVisionToggle();
+    initInlineImageViewer();
     const page = document.body.getAttribute("data-page");
     if (page === "login") initLoginPage();
     if (page === "register") initRegisterPage();
