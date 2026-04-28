@@ -2,6 +2,8 @@
 (function () {
   const THEME_KEY = "ldpr_theme";
   const VISION_KEY = "ldpr_vision_mode";
+  const VISION_SETTINGS_KEY = "ldpr_vision_settings";
+  
   const ROLES = { USER: "user", ADMIN: "admin" };
   const STATUS_LABELS = { new: "Новое", in_progress: "В работе", closed: "Завершено" };
   const STATUS_CLASSES = { new: "status-new", in_progress: "status-progress", closed: "status-closed" };
@@ -11,6 +13,7 @@
     social_help: "Помощь в соцзащите",
     suggestion: "Общее предложение",
   };
+  
   function sb() { if (!window.__SUPABASE__) throw new Error("Supabase клиент не инициализирован."); return window.__SUPABASE__; }
   function nowIso() { return new Date().toISOString(); }
   function formatDate(iso) { return new Date(iso).toLocaleString("ru-RU"); }
@@ -18,9 +21,12 @@
   function mapTicket(r) { return { id: r.id, userId: r.user_id, subject: r.subject, status: r.status, createdAt: r.created_at, updatedAt: r.updated_at }; }
   function mapMessage(r) { return { id: r.id, ticketId: r.ticket_id, senderId: r.sender_id, senderRole: r.sender_role, content: r.content, attachment: r.attachment || null, createdAt: r.created_at }; }
   function mapProfile(p, u) { return { id: p.id, name: p.name || u.user_metadata.full_name || "Пользователь", email: p.email || u.email || "", role: p.role || ROLES.USER, phone: p.phone || "", address: p.address || "" }; }
+  
+  // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
   async function getSession() { const { data, error } = await sb().auth.getSession(); ensureNoError(error, "Не удалось получить сессию"); return data.session || null; }
   async function getAuthUser() { const { data, error } = await sb().auth.getUser(); ensureNoError(error, "Не удалось получить пользователя"); return data.user || null; }
   async function getProfile(id) { const { data, error } = await sb().from("profiles").select("*").eq("id", id).maybeSingle(); ensureNoError(error, "Не удалось получить профиль"); return data; }
+  
   async function ensureProfile(user, payload) {
     const existing = await getProfile(user.id);
     if (existing) return mapProfile(existing, user);
@@ -32,68 +38,241 @@
     ensureNoError(error, "Не удалось создать профиль");
     return mapProfile(data, user);
   }
+  
   async function getSessionUser() { const s = await getSession(); if (!s) return null; const u = await getAuthUser(); if (!u) return null; return ensureProfile(u); }
   async function logout() { await sb().auth.signOut(); location.href = "index.html"; }
+  
   async function requireRole(role) {
     const user = await getSessionUser();
     if (!user) { location.href = "index.html"; return null; }
     if (user.role !== role) { location.href = user.role === ROLES.ADMIN ? "admin-dashboard.html" : "user-dashboard.html"; return null; }
     return user;
   }
+  
   async function fetchUserTickets(uid) { const { data, error } = await sb().from("tickets").select("*").eq("user_id", uid).order("created_at", { ascending: false }); ensureNoError(error, "Не удалось загрузить обращения"); return (data || []).map(mapTicket); }
   async function fetchAllTickets() { const { data, error } = await sb().from("tickets").select("*").order("created_at", { ascending: false }); ensureNoError(error, "Не удалось загрузить обращения"); return (data || []).map(mapTicket); }
   async function fetchMessagesByTicket(tid) { const { data, error } = await sb().from("messages").select("*").eq("ticket_id", tid).order("created_at", { ascending: true }); ensureNoError(error, "Не удалось загрузить сообщения"); return (data || []).map(mapMessage); }
   async function fetchProfilesMap() { const { data, error } = await sb().from("profiles").select("*"); ensureNoError(error, "Не удалось загрузить профили"); const m = {}; (data || []).forEach(function (p) { m[p.id] = p; }); return m; }
+  
   function csvEscape(v) { const s = String(v == null ? "" : v); return '"' + s.replace(/"/g, '""') + '"'; }
   function parseDateOnly(value, eod) { if (!value) return null; const d = new Date(value + (eod ? "T23:59:59.999" : "T00:00:00.000")); return isNaN(d.getTime()) ? null : d; }
-  function applyTheme(theme) { document.body.classList.remove("theme-dark", "theme-light"); document.body.classList.add(theme === "light" ? "theme-light" : "theme-dark"); }
+  
+  // ========== ТЕМА ==========
+  function applyTheme(theme) { 
+    document.body.classList.remove("theme-dark", "theme-light"); 
+    document.body.classList.add(theme === "light" ? "theme-light" : "theme-dark");
+    // Обновляем визуальные эффекты, если режим слабовидящих активен
+    if (document.body.classList.contains("vision-impaired")) {
+      applyVisionFilters();
+    }
+  }
+  
   function initThemeToggle() {
-    const saved = localStorage.getItem(THEME_KEY) || "dark"; applyTheme(saved); if (document.getElementById("themeToggleBtn")) return;
-    const btn = document.createElement("button"); btn.id = "themeToggleBtn"; btn.className = "theme-toggle-btn"; btn.type = "button";
-    function setLabel(theme) { btn.textContent = theme === "light" ? "Темная тема" : "Светлая тема"; }
-    setLabel(saved); btn.addEventListener("click", function () { const c = document.body.classList.contains("theme-light") ? "light" : "dark"; const n = c === "light" ? "dark" : "light"; applyTheme(n); localStorage.setItem(THEME_KEY, n); setLabel(n); });
+    const saved = localStorage.getItem(THEME_KEY) || "dark"; 
+    applyTheme(saved); 
+    if (document.getElementById("themeToggleBtn")) return;
+    const btn = document.createElement("button"); 
+    btn.id = "themeToggleBtn"; 
+    btn.className = "theme-toggle-btn"; 
+    btn.type = "button";
+    function setLabel(theme) { btn.textContent = theme === "light" ? "🌙 Темная" : "☀️ Светлая"; }
+    setLabel(saved); 
+    btn.addEventListener("click", function () { 
+      const c = document.body.classList.contains("theme-light") ? "light" : "dark"; 
+      const n = c === "light" ? "dark" : "light"; 
+      applyTheme(n); 
+      localStorage.setItem(THEME_KEY, n); 
+      setLabel(n); 
+    });
     document.body.appendChild(btn);
   }
+  
+  // ========== РЕЖИМ ДЛЯ СЛАБОВИДЯЩИХ ==========
+  let visionPanel = null;
+  
+  function getVisionSettings() {
+    const defaults = { enabled: false, mode: "contrast", fontSize: 100, letterSpacing: 0 };
+    try {
+      const saved = localStorage.getItem(VISION_SETTINGS_KEY);
+      if (saved) return { ...defaults, ...JSON.parse(saved) };
+    } catch(e) {}
+    return defaults;
+  }
+  
+  function saveVisionSettings(settings) {
+    localStorage.setItem(VISION_SETTINGS_KEY, JSON.stringify(settings));
+  }
+  
+  function applyVisionFilters() {
+    const settings = getVisionSettings();
+    if (!settings.enabled) return;
+    
+    // Удаляем все классы фильтров
+    document.body.classList.remove("vision-contrast", "vision-bw", "vision-invert");
+    
+    switch(settings.mode) {
+      case "bw":
+        document.body.classList.add("vision-bw");
+        break;
+      case "invert":
+        document.body.classList.add("vision-invert");
+        break;
+      case "contrast":
+      default:
+        document.body.classList.add("vision-contrast");
+        break;
+    }
+    
+    // Применяем размер шрифта и интервал
+    document.body.style.fontSize = settings.fontSize + "%";
+    document.body.style.letterSpacing = settings.letterSpacing + "px";
+  }
+  
   function applyVisionMode(enabled) {
+    const settings = getVisionSettings();
+    settings.enabled = enabled;
+    saveVisionSettings(settings);
+    
     if (enabled) {
       document.body.classList.add("vision-impaired");
+      applyVisionFilters();
+      showVisionPanel();
     } else {
-      document.body.classList.remove("vision-impaired");
+      document.body.classList.remove("vision-impaired", "vision-contrast", "vision-bw", "vision-invert");
+      document.body.style.fontSize = "";
+      document.body.style.letterSpacing = "";
+      hideVisionPanel();
     }
-    localStorage.setItem(VISION_KEY, enabled ? "on" : "off");
   }
+  
+  function showVisionPanel() {
+    if (visionPanel) return;
+    visionPanel = document.createElement("div");
+    visionPanel.id = "visionPanel";
+    visionPanel.className = "vision-panel";
+    visionPanel.innerHTML = `
+      <div class="vision-panel-header">
+        <span>🔍 Режим для слабовидящих</span>
+        <button id="closeVisionPanelBtn" class="vision-panel-close">✕</button>
+      </div>
+      <div class="vision-panel-content">
+        <div class="vision-control-group">
+          <label>🎨 Цветовой режим:</label>
+          <div class="vision-buttons">
+            <button data-vision-mode="contrast" class="vision-mode-btn">Высокий контраст</button>
+            <button data-vision-mode="bw" class="vision-mode-btn">Ч/Б</button>
+            <button data-vision-mode="invert" class="vision-mode-btn">Инверсия</button>
+          </div>
+        </div>
+        <div class="vision-control-group">
+          <label>📏 Размер шрифта:</label>
+          <div class="vision-buttons">
+            <button data-font-size="80" class="vision-size-btn">A-</button>
+            <button data-font-size="100" class="vision-size-btn active">A</button>
+            <button data-font-size="120" class="vision-size-btn">A+</button>
+            <button data-font-size="150" class="vision-size-btn">A++</button>
+          </div>
+        </div>
+        <div class="vision-control-group">
+          <label>📐 Межбуквенный интервал:</label>
+          <div class="vision-buttons">
+            <button data-letter-spacing="0" class="vision-spacing-btn active">Нет</button>
+            <button data-letter-spacing="1" class="vision-spacing-btn">Малый</button>
+            <button data-letter-spacing="2" class="vision-spacing-btn">Средний</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(visionPanel);
+    
+    // Навешиваем обработчики
+    visionPanel.querySelectorAll("[data-vision-mode]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const mode = btn.getAttribute("data-vision-mode");
+        const settings = getVisionSettings();
+        settings.mode = mode;
+        saveVisionSettings(settings);
+        applyVisionFilters();
+        // Обновляем активную кнопку
+        visionPanel.querySelectorAll("[data-vision-mode]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+    });
+    
+    visionPanel.querySelectorAll("[data-font-size]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const size = parseInt(btn.getAttribute("data-font-size"));
+        const settings = getVisionSettings();
+        settings.fontSize = size;
+        saveVisionSettings(settings);
+        document.body.style.fontSize = size + "%";
+        visionPanel.querySelectorAll("[data-font-size]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+    });
+    
+    visionPanel.querySelectorAll("[data-letter-spacing]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const spacing = parseInt(btn.getAttribute("data-letter-spacing"));
+        const settings = getVisionSettings();
+        settings.letterSpacing = spacing;
+        saveVisionSettings(settings);
+        document.body.style.letterSpacing = spacing + "px";
+        visionPanel.querySelectorAll("[data-letter-spacing]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+    });
+    
+    document.getElementById("closeVisionPanelBtn").addEventListener("click", () => hideVisionPanel());
+    
+    // Активируем текущие настройки в UI
+    const settings = getVisionSettings();
+    visionPanel.querySelector(`[data-vision-mode="${settings.mode}"]`)?.classList.add("active");
+    visionPanel.querySelector(`[data-font-size="${settings.fontSize}"]`)?.classList.add("active");
+    visionPanel.querySelector(`[data-letter-spacing="${settings.letterSpacing}"]`)?.classList.add("active");
+  }
+  
+  function hideVisionPanel() {
+    if (visionPanel) {
+      visionPanel.remove();
+      visionPanel = null;
+    }
+  }
+  
   function initVisionToggle() {
-    const saved = localStorage.getItem(VISION_KEY) === "on";
-    applyVisionMode(saved);
+    const settings = getVisionSettings();
+    applyVisionMode(settings.enabled);
+    
     if (document.getElementById("visionToggleBtn")) return;
     const btn = document.createElement("button");
     btn.id = "visionToggleBtn";
     btn.className = "vision-toggle-btn";
     btn.type = "button";
-    function updateBtnText() {
-      const isOn = document.body.classList.contains("vision-impaired");
-      btn.textContent = isOn ? "Обычная версия" : "Версия для слабовидящих";
-    }
-    updateBtnText();
+    btn.innerHTML = "👁️ Режим для слабовидящих";
     btn.addEventListener("click", function () {
-      const wasOn = document.body.classList.contains("vision-impaired");
-      applyVisionMode(!wasOn);
-      updateBtnText();
+      const isOn = document.body.classList.contains("vision-impaired");
+      applyVisionMode(!isOn);
     });
     document.body.appendChild(btn);
   }
+  
+  // ========== РАБОТА С ВЛОЖЕНИЯМИ ==========
   function normalizeAttachment(a) { if (!a) return null; if (typeof a === "string") return { name: a, type: "", isImage: false, dataUrl: "" }; return { name: a.name || "Файл", type: a.type || "", isImage: Boolean(a.isImage), dataUrl: a.dataUrl || "" }; }
+  
   function renderAttachmentHtml(att) {
     const a = normalizeAttachment(att); if (!a) return "";
     if (a.isImage && a.dataUrl) return '<div class="mt-1 text-xs opacity-90"><p>Вложение: ' + a.name + '</p><a class="image-open-link" href="' + a.dataUrl + '"><img src="' + a.dataUrl + '" alt="' + a.name + '" class="mt-2 rounded-md border border-slate-200 max-h-40 w-auto object-contain bg-white" /></a><a class="image-open-link text-blue-700 underline" href="' + a.dataUrl + '">Открыть изображение</a></div>';
     if (a.dataUrl) return '<div class="mt-1 text-xs opacity-90"><p>Вложение: ' + a.name + '</p><a class="text-blue-700 underline" href="' + a.dataUrl + '" download="' + a.name + '">Скачать файл</a></div>';
     return '<p class="text-xs opacity-80 mt-1">Вложение: ' + a.name + "</p>";
   }
+  
   function toAttachment(file) {
     if (!file) return Promise.resolve(null);
     const base = { name: file.name, type: file.type || "", isImage: Boolean(file.type && file.type.indexOf("image/") === 0), dataUrl: "" };
     return new Promise(function (resolve) { const r = new FileReader(); r.onload = function (e) { const dataUrl = typeof e.target.result === "string" ? e.target.result : ""; if (!dataUrl) return resolve(base); base.dataUrl = dataUrl; resolve(base); }; r.onerror = function () { resolve(base); }; r.readAsDataURL(file); });
   }
+  
+  // ========== СТРАНИЦЫ ==========
   function initLoginPage() {
     const form = document.getElementById("loginForm"); const errorBox = document.getElementById("errorBox"); if (!form) return;
     getSessionUser().then(function (sess) { if (sess) location.href = sess.role === ROLES.ADMIN ? "admin-dashboard.html" : "user-dashboard.html"; }).catch(function () {});
@@ -106,6 +285,7 @@
       } catch (err) { errorBox.textContent = err.message || "Ошибка входа"; errorBox.classList.remove("hidden"); }
     });
   }
+  
   function initRegisterPage() {
     const form = document.getElementById("registerForm"); const errorBox = document.getElementById("errorBox"); if (!form) return;
     form.addEventListener("submit", async function (event) {
@@ -124,6 +304,7 @@
       } catch (err) { errorBox.textContent = err.message || "Ошибка регистрации"; errorBox.classList.remove("hidden"); }
     });
   }
+  
   async function initUserPage() {
     let currentUser = await requireRole(ROLES.USER); if (!currentUser) return;
     document.getElementById("logoutBtn").addEventListener("click", function () { logout().catch(function () {}); });
@@ -188,6 +369,7 @@
     });
     await renderTickets();
   }
+  
   async function initAdminPage() {
     const admin = await requireRole(ROLES.ADMIN); if (!admin) return;
     document.getElementById("logoutBtn").addEventListener("click", function () { logout().catch(function () {}); });
@@ -256,6 +438,7 @@
     document.getElementById("reportDateTo").addEventListener("change", function () { renderTable().catch(function () {}); });
     await renderTable();
   }
+  
   function initInlineImageViewer() {
     if (!document.getElementById("imagePreviewModal")) {
       var modal = document.createElement("div"); modal.id = "imagePreviewModal"; modal.className = "fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-[100]";
@@ -267,6 +450,7 @@
     closeBtn.addEventListener("click", closeViewer); modalEl.addEventListener("click", function (e) { if (e.target === modalEl) closeViewer(); }); document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeViewer(); });
     document.addEventListener("click", function (e) { var link = e.target.closest("a.image-open-link"); if (!link) return; e.preventDefault(); var src = link.getAttribute("href"); if (!src) return; imgEl.src = src; modalEl.classList.remove("hidden"); modalEl.classList.add("flex"); });
   }
+  
   document.addEventListener("DOMContentLoaded", function () {
     initThemeToggle();
     initVisionToggle();
