@@ -103,30 +103,36 @@
   }
   
   function applyVisionFilters() {
-    const settings = getVisionSettings();
-    if (!settings.enabled) return;
-    
-    document.body.classList.remove("vision-none", "vision-contrast", "vision-bw", "vision-invert");
-    
-    switch(settings.mode) {
-      case "contrast":
-        document.body.classList.add("vision-contrast");
-        break;
-      case "bw":
-        document.body.classList.add("vision-bw");
-        break;
-      case "invert":
-        document.body.classList.add("vision-invert");
-        break;
-      case "none":
-      default:
-        document.body.classList.add("vision-none");
-        break;
-    }
-    
-    document.body.style.fontSize = settings.fontSize + "%";
-    document.body.style.letterSpacing = settings.letterSpacing + "px";
+  const settings = getVisionSettings();
+  if (!settings.enabled) return;
+  
+  document.body.classList.remove("vision-none", "vision-contrast", "vision-bw", "vision-invert");
+  
+  switch(settings.mode) {
+    case "contrast":
+      document.body.classList.add("vision-contrast");
+      break;
+    case "bw":
+      document.body.classList.add("vision-bw");
+      break;
+    case "invert":
+      document.body.classList.add("vision-invert");
+      break;
+    case "none":
+    default:
+      document.body.classList.add("vision-none");
+      break;
   }
+  
+  // ОГРАНИЧИВАЕМ МАКСИМАЛЬНЫЙ РАЗМЕР ШРИФТА НА ТЕЛЕФОНАХ
+  let finalFontSize = settings.fontSize;
+  if (window.innerWidth <= 768 && finalFontSize > 120) {
+    finalFontSize = 120; // на телефонах не больше 120%
+  }
+  
+  document.body.style.fontSize = finalFontSize + "%";
+  document.body.style.letterSpacing = settings.letterSpacing + "px";
+}
   
   function applyVisionMode(enabled) {
     const settings = getVisionSettings();
