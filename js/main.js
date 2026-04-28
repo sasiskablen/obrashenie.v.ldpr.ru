@@ -61,7 +61,6 @@
   function applyTheme(theme) { 
     document.body.classList.remove("theme-dark", "theme-light"); 
     document.body.classList.add(theme === "light" ? "theme-light" : "theme-dark");
-    // Обновляем визуальные эффекты, если режим слабовидящих активен
     if (document.body.classList.contains("vision-impaired")) {
       applyVisionFilters();
     }
@@ -91,7 +90,7 @@
   let visionPanel = null;
   
   function getVisionSettings() {
-    const defaults = { enabled: false, mode: "contrast", fontSize: 100, letterSpacing: 0 };
+    const defaults = { enabled: false, mode: "none", fontSize: 100, letterSpacing: 0 };
     try {
       const saved = localStorage.getItem(VISION_SETTINGS_KEY);
       if (saved) return { ...defaults, ...JSON.parse(saved) };
@@ -107,23 +106,24 @@
     const settings = getVisionSettings();
     if (!settings.enabled) return;
     
-    // Удаляем все классы фильтров
-    document.body.classList.remove("vision-contrast", "vision-bw", "vision-invert");
+    document.body.classList.remove("vision-none", "vision-contrast", "vision-bw", "vision-invert");
     
     switch(settings.mode) {
+      case "contrast":
+        document.body.classList.add("vision-contrast");
+        break;
       case "bw":
         document.body.classList.add("vision-bw");
         break;
       case "invert":
         document.body.classList.add("vision-invert");
         break;
-      case "contrast":
+      case "none":
       default:
-        document.body.classList.add("vision-contrast");
+        document.body.classList.add("vision-none");
         break;
     }
     
-    // Применяем размер шрифта и интервал
     document.body.style.fontSize = settings.fontSize + "%";
     document.body.style.letterSpacing = settings.letterSpacing + "px";
   }
@@ -138,7 +138,7 @@
       applyVisionFilters();
       showVisionPanel();
     } else {
-      document.body.classList.remove("vision-impaired", "vision-contrast", "vision-bw", "vision-invert");
+      document.body.classList.remove("vision-impaired", "vision-none", "vision-contrast", "vision-bw", "vision-invert");
       document.body.style.fontSize = "";
       document.body.style.letterSpacing = "";
       hideVisionPanel();
@@ -159,7 +159,8 @@
         <div class="vision-control-group">
           <label>🎨 Цветовой режим:</label>
           <div class="vision-buttons">
-            <button data-vision-mode="contrast" class="vision-mode-btn">Высокий контраст</button>
+            <button data-vision-mode="none" class="vision-mode-btn">Нет</button>
+            <button data-vision-mode="contrast" class="vision-mode-btn">Контраст</button>
             <button data-vision-mode="bw" class="vision-mode-btn">Ч/Б</button>
             <button data-vision-mode="invert" class="vision-mode-btn">Инверсия</button>
           </div>
@@ -171,6 +172,7 @@
             <button data-font-size="100" class="vision-size-btn active">A</button>
             <button data-font-size="120" class="vision-size-btn">A+</button>
             <button data-font-size="150" class="vision-size-btn">A++</button>
+            <button data-font-size="180" class="vision-size-btn">A+++</button>
           </div>
         </div>
         <div class="vision-control-group">
@@ -179,13 +181,13 @@
             <button data-letter-spacing="0" class="vision-spacing-btn active">Нет</button>
             <button data-letter-spacing="1" class="vision-spacing-btn">Малый</button>
             <button data-letter-spacing="2" class="vision-spacing-btn">Средний</button>
+            <button data-letter-spacing="3" class="vision-spacing-btn">Большой</button>
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(visionPanel);
     
-    // Навешиваем обработчики
     visionPanel.querySelectorAll("[data-vision-mode]").forEach(btn => {
       btn.addEventListener("click", () => {
         const mode = btn.getAttribute("data-vision-mode");
@@ -193,7 +195,6 @@
         settings.mode = mode;
         saveVisionSettings(settings);
         applyVisionFilters();
-        // Обновляем активную кнопку
         visionPanel.querySelectorAll("[data-vision-mode]").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
       });
@@ -225,7 +226,6 @@
     
     document.getElementById("closeVisionPanelBtn").addEventListener("click", () => hideVisionPanel());
     
-    // Активируем текущие настройки в UI
     const settings = getVisionSettings();
     visionPanel.querySelector(`[data-vision-mode="${settings.mode}"]`)?.classList.add("active");
     visionPanel.querySelector(`[data-font-size="${settings.fontSize}"]`)?.classList.add("active");
@@ -404,7 +404,7 @@
       const rows = filterRowsByPeriod(await getRows(), fromValue, toValue).filter(function (r) { const sOk = status === "all" || r.ticket.status === status; const tOk = topic === "all" || r.ticket.subject === topic; const qOk = !search || (r.user && ((r.user.name || "").toLowerCase().includes(search) || (r.user.email || "").toLowerCase().includes(search))); return sOk && tOk && qOk; });
       const tbody = document.getElementById("ticketsTbody");
       if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">Ничего не найдено</td></tr>'; return; }
-      tbody.innerHTML = rows.map(function (r) { return "<tr class='border-b'><td class='p-3'>" + formatDate(r.ticket.createdAt) + "</td><td class='p-3'>" + (r.user ? r.user.name : "-") + "</td><td class='p-3'>" + (r.user ? r.user.email : "-") + "</td><td class='p-3'>" + TOPICS[r.ticket.subject] + "</td><td class='p-3'>" + ((r.first && r.first.content) ? r.first.content.slice(0, 70) : "") + "</td><td class='p-3'><span class='status-pill " + STATUS_CLASSES[r.ticket.status] + "'>" + STATUS_LABELS[r.ticket.status] + "</span></td><td class='p-3'><button class='px-3 py-1 bg-blue-700 text-white rounded hover:bg-blue-800' data-open-ticket='" + r.ticket.id + "'>Открыть</button></td></tr>"; }).join("");
+      tbody.innerHTML = rows.map(function (r) { return "<tr class='border-b'><td class='p-3'>" + formatDate(r.ticket.createdAt) + "</td><td class='p-3'>" + (r.user ? r.user.name : "-") + "</td><td class='p-3'>" + (r.user ? r.user.email : "-") + "<tr><td class='p-3'>" + TOPICS[r.ticket.subject] + "</td><td class='p-3'>" + ((r.first && r.first.content) ? r.first.content.slice(0, 70) : "") + "</td><td class='p-3'><span class='status-pill " + STATUS_CLASSES[r.ticket.status] + "'>" + STATUS_LABELS[r.ticket.status] + "</span><td><td class='p-3'><button class='px-3 py-1 bg-blue-700 text-white rounded hover:bg-blue-800' data-open-ticket='" + r.ticket.id + "'>Открыть</button></td></tr>"; }).join("");
       tbody.querySelectorAll("[data-open-ticket]").forEach(function (btn) { btn.addEventListener("click", function () { openTicket(btn.getAttribute("data-open-ticket")); }); });
     }
     async function openTicket(ticketId) {
