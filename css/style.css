@@ -990,3 +990,7 @@ body.vision-impaired select {
     min-width: 800px !important;
   }
 }
+/* Кнопка Открыть не переносится */
+td button {
+  white-space: nowrap !important;
+}
