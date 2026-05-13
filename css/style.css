@@ -961,3 +961,32 @@ body.vision-impaired select {
     gap: 8px !important;
   }
 }
+/* ФИКС ТАБЛИЦЫ ДЛЯ КОМПЬЮТЕРА - РАСШИРЕНИЕ И ПЕРЕНОС ТЕКСТА */
+@media (min-width: 1024px) {
+  table {
+    width: 100% !important;
+    min-width: 100% !important;
+    table-layout: auto !important;
+  }
+  
+  td, th {
+    white-space: normal !important;
+    word-break: break-word !important;
+    max-width: 300px;
+  }
+  
+  td:nth-child(5) {
+    min-width: 200px;
+  }
+}
+
+/* ГОРИЗОНТАЛЬНЫЙ СКРОЛЛ ДЛЯ МАЛЕНЬКИХ ЭКРАНОВ - НЕ ЛОМАЕТСЯ */
+@media (max-width: 1023px) {
+  .overflow-x-auto {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  table {
+    min-width: 800px !important;
+  }
+}
