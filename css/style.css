@@ -961,19 +961,3 @@ body.vision-impaired select {
     gap: 8px !important;
   }
 }
-/* Таблица — фикс для компьютера */
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 10px 12px;
-  text-align: left;
-  border-bottom: 1px solid var(--ldpr-card-border);
-}
-
-td {
-  word-break: break-word;
-  white-space: normal;
-}
