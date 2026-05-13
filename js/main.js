@@ -17,7 +17,24 @@
   function sb() { if (!window.__SUPABASE__) throw new Error("Supabase клиент не инициализирован."); return window.__SUPABASE__; }
   function nowIso() { return new Date().toISOString(); }
   function formatDate(iso) { return new Date(iso).toLocaleString("ru-RU"); }
-  function ensureNoError(error, fallback) { if (error) throw new Error(error.message || fallback); }
+  function ensureNoError(error, fallback) {
+  if (error) {
+    // Замена английских сообщений на русские
+    let msg = error.message;
+    if (msg === "Invalid login credentials") {
+      msg = "Неверный email или пароль";
+    } else if (msg === "Email not confirmed") {
+      msg = "Email не подтверждён. Проверьте почту";
+    } else if (msg === "User already registered") {
+      msg = "Пользователь с таким email уже зарегистрирован";
+    } else if (msg && msg.includes("Password should be at least 6 characters")) {
+      msg = "Пароль должен быть не менее 6 символов";
+    } else if (msg && msg.includes("email")) {
+      msg = "Некорректный email";
+    }
+    throw new Error(msg || fallback);
+  }
+}
   function mapTicket(r) { return { id: r.id, userId: r.user_id, subject: r.subject, status: r.status, createdAt: r.created_at, updatedAt: r.updated_at }; }
   function mapMessage(r) { return { id: r.id, ticketId: r.ticket_id, senderId: r.sender_id, senderRole: r.sender_role, content: r.content, attachment: r.attachment || null, createdAt: r.created_at }; }
   function mapProfile(p, u) { return { id: p.id, name: p.name || u.user_metadata.full_name || "Пользователь", email: p.email || u.email || "", role: p.role || ROLES.USER, phone: p.phone || "", address: p.address || "" }; }
