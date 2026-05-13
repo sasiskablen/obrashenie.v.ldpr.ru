@@ -303,7 +303,13 @@
       event.preventDefault(); errorBox.classList.add("hidden");
       try {
         const email = document.getElementById("email").value.trim(); const password = document.getElementById("password").value;
-        const { data, error } = await sb().auth.signInWithPassword({ email: email, password: password }); ensureNoError(error, "Неверный email или пароль"); if (!data.user) throw new Error("Не удалось авторизоваться");
+        const { data, error } = await sb().auth.signInWithPassword({ email: email, password: password });
+if (error) {
+  if (error.message === "Invalid login credentials") {
+    throw new Error("Неверный email или пароль");
+  }
+  throw new Error(error.message);
+} if (!data.user) throw new Error("Не удалось авторизоваться");
         const profile = await ensureProfile(data.user, { email: email }); location.href = profile.role === ROLES.ADMIN ? "admin-dashboard.html" : "user-dashboard.html";
       } catch (err) { errorBox.textContent = err.message || "Ошибка входа"; errorBox.classList.remove("hidden"); }
     });
